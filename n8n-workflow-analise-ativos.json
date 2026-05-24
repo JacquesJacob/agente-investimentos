@@ -1,0 +1,334 @@
+{
+  "name": "Analise diaria de ativos",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1100,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"email\": \"jacques@jacob.net.br\",\n  \"stocks\": \"PETR4,TAEE11,VALE3,ITSA4,BBAS3,BBSE3,MXRF11,XPML11,GARE11,VGHF11,VISC11\",\n  \"cryptoId\": \"bitcoin\",\n  \"newsQueryBrasil\": \"(PETR4 OR Petrobras) OR (TAEE11 OR Taesa) OR (VALE3 OR Vale) OR (ITSA4 OR Itausa) OR (BBAS3 OR \\\"Banco do Brasil\\\") OR (BBSE3 OR \\\"BB Seguridade\\\") OR (MXRF11 OR \\\"Maxi Renda\\\") OR (XPML11 OR \\\"XP Malls\\\") OR (GARE11 OR \\\"Guardian Real Estate\\\") OR (VGHF11 OR \\\"Valora Hedge Fund\\\") OR (VISC11 OR \\\"Vinci Shopping Centers\\\")\",\n  \"newsQueryBitcoin\": \"bitcoin OR btc\",\n  \"gnewsLanguage\": \"pt\",\n  \"gnewsCountry\": \"br\"\n}"
+      },
+      "id": "2",
+      "name": "Set Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -880,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://brapi.dev/api/quote/{{$json.stocks}}?range=5d&interval=1d",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.BRAPI_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3",
+      "name": "HTTP Acoes BR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.coingecko.com/api/v3/simple/price?ids={{$json.cryptoId}}&vs_currencies=brl,usd&include_24hr_change=true&include_last_updated_at=true",
+        "options": {}
+      },
+      "id": "4",
+      "name": "HTTP Bitcoin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://gnews.io/api/v4/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$json.newsQueryBrasil}}"
+            },
+            {
+              "name": "lang",
+              "value": "={{$json.gnewsLanguage}}"
+            },
+            {
+              "name": "country",
+              "value": "={{$json.gnewsCountry}}"
+            },
+            {
+              "name": "max",
+              "value": "10"
+            },
+            {
+              "name": "sortby",
+              "value": "publishedAt"
+            },
+            {
+              "name": "apikey",
+              "value": "={{$env.GNEWS_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5",
+      "name": "HTTP Noticias BR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://gnews.io/api/v4/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$json.newsQueryBitcoin}}"
+            },
+            {
+              "name": "lang",
+              "value": "={{$json.gnewsLanguage}}"
+            },
+            {
+              "name": "max",
+              "value": "5"
+            },
+            {
+              "name": "sortby",
+              "value": "publishedAt"
+            },
+            {
+              "name": "apikey",
+              "value": "={{$env.GNEWS_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6",
+      "name": "HTTP Noticias BTC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -640,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Set Config').first().json;\nconst stocks = $('HTTP Acoes BR').first().json.results || [];\nconst btc = $('HTTP Bitcoin').first().json.bitcoin || {};\nconst newsBr = $('HTTP Noticias BR').first().json.articles || [];\nconst newsBtc = $('HTTP Noticias BTC').first().json.articles || [];\n\nconst stockText = stocks.map((s) => {\n  const price = s.regularMarketPrice ?? 'n/d';\n  const changePct = s.regularMarketChangePercent ?? 'n/d';\n  const high = s.regularMarketDayHigh ?? 'n/d';\n  const low = s.regularMarketDayLow ?? 'n/d';\n  const volume = s.regularMarketVolume ?? 'n/d';\n  const marketCap = s.marketCap ?? 'n/d';\n\n  return [\n    `Ativo: ${s.symbol}`,\n    `Nome: ${s.shortName || s.longName || 'n/d'}`,\n    `Preco atual: ${price}`,\n    `Variacao no dia: ${changePct}%`,\n    `Maxima do dia: ${high}`,\n    `Minima do dia: ${low}`,\n    `Volume: ${volume}`,\n    `Valor de mercado: ${marketCap}`,\n  ].join('\\n');\n}).join('\\n\\n');\n\nconst btcText = [\n  'Ativo: BITCOIN',\n  `Preco BRL: ${btc.brl ?? 'n/d'}`,\n  `Preco USD: ${btc.usd ?? 'n/d'}`,\n  `Variacao em 24h: ${btc.brl_24h_change ?? btc.usd_24h_change ?? 'n/d'}%`,\n  `Ultima atualizacao: ${btc.last_updated_at ?? 'n/d'}`,\n].join('\\n');\n\nconst newsText = [...newsBr, ...newsBtc]\n  .slice(0, 14)\n  .map((n, index) => [\n    `${index + 1}. ${n.title || 'Sem titulo'}`,\n    `Fonte: ${n.source?.name || 'n/d'}`,\n    `Publicado em: ${n.publishedAt || 'n/d'}`,\n    `Resumo: ${n.description || 'Sem resumo'}`,\n    `Link: ${n.url || 'n/d'}`,\n  ].join('\\n'))\n  .join('\\n\\n');\n\nconst prompt = `Voce e um analista financeiro objetivo, prudente e claro. Analise os ativos PETR4, TAEE11, VALE3, ITSA4, BBAS3, BBSE3, MXRF11, XPML11, GARE11, VGHF11, VISC11 e BITCOIN usando somente os dados e noticias abaixo.\\n\\nPara cada ativo, entregue:\\n- leitura rapida do movimento atual\\n- noticias ou fatos relevantes\\n- riscos e pontos de atencao\\n- conclusao em uma destas categorias: comprar aos poucos, segurar, evitar aumentar posicao\\n\\nRegras:\\n- nao invente dados\\n- nao faca promessa de rentabilidade\\n- seja util para investidor pessoa fisica de medio e longo prazo\\n- escreva em portugues do Brasil\\n- se faltarem dados, deixe isso explicito\\n- para FIIs, considere vacancia, qualidade dos ativos, diversificacao e sensibilidade a juros quando houver dados suficientes\\n\\nNo final, gere:\\n- um resumo executivo de 5 a 8 linhas\\n- os 3 ativos mais interessantes no momento\\n- os 2 ativos que exigem mais cautela\\n\\nDados de mercado:\\n${stockText}\\n\\n${btcText}\\n\\nNoticias recentes:\\n${newsText}`;\n\nreturn [{\n  json: {\n    email: config.email,\n    prompt,\n    contexto: {\n      stocks,\n      bitcoin: btc,\n      newsBr,\n      newsBtc,\n    },\n  },\n}];"
+      },
+      "id": "8",
+      "name": "Preparar Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-5.4-mini\",\n  \"input\": $json.prompt\n}",
+        "options": {}
+      },
+      "id": "9",
+      "name": "OpenAI Analise",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        120,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Preparar Prompt').first().json.email;\nconst response = $json;\n\nlet analysis = '';\n\nif (typeof response.output_text === 'string' && response.output_text.trim()) {\n  analysis = response.output_text.trim();\n} else if (Array.isArray(response.output)) {\n  const texts = [];\n  for (const item of response.output) {\n    if (Array.isArray(item.content)) {\n      for (const content of item.content) {\n        if (content.type === 'output_text' && content.text) {\n          texts.push(content.text);\n        }\n      }\n    }\n  }\n  analysis = texts.join('\\n\\n').trim();\n}\n\nif (!analysis) {\n  analysis = 'Nao foi possivel extrair a analise automaticamente da resposta da OpenAI. Revise o no OpenAI Analise.';\n}\n\nconst html = `\n<h2>Analise diaria de ativos</h2>\n<p>Data: ${$now.setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm')}</p>\n<pre style=\"white-space: pre-wrap; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;\">${analysis.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>\n<p>Mensagem automatica enviada pelo n8n.</p>\n`.trim();\n\nreturn [{ json: { email, analysis, html } }];"
+      },
+      "id": "10",
+      "name": "Formatar Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "fromEmail": "SEU_EMAIL_DE_ENVIO",
+        "toEmail": "={{$json.email}}",
+        "subject": "=Analise diaria de ativos - {{$now.setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy')}}",
+        "emailFormat": "html",
+        "html": "={{$json.html}}",
+        "options": {}
+      },
+      "id": "11",
+      "name": "Enviar Email",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2.1,
+      "position": [
+        620,
+        260
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "configure-manually",
+          "name": "SMTP Credential"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Config": {
+      "main": [
+        [
+          {
+            "node": "HTTP Acoes BR",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Bitcoin",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Noticias BR",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Noticias BTC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Acoes BR": {
+      "main": [
+        [
+          {
+            "node": "Preparar Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Analise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Analise": {
+      "main": [
+        [
+          {
+            "node": "Formatar Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Email": {
+      "main": [
+        [
+          {
+            "node": "Enviar Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {},
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "analise-diaria-ativos"
+}
