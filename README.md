@@ -1,5 +1,8 @@
 # Agente de Investimentos no n8n
 
+<img width="946" height="293" alt="image" src="https://github.com/user-attachments/assets/07fd7953-c435-48b0-b0f6-54f61dde56e8" />
+
+
 Projeto de automacao para monitorar uma carteira de ativos brasileiros e `Bitcoin`, gerar uma analise diaria com IA e enviar o relatorio por email em dias uteis.
 
 Arquivos principais:
